@@ -1,0 +1,45 @@
+Before contributing, please keep in mind the following:
+
+ - The development branch of micronucleus is called "testing" and contains all
+   the latest changes. You can check it out with "git checkout testing" or using
+   a graphical git tools. 
+   https://github.com/micronucleus/micronucleus/tree/testing
+ 
+ - Please commit contributions as a pull request to "testing" so there is less
+   trouble with merging. Alternatively, if you only have small changes, just
+   open an issue and one of the maintainers will add it manually.
+   https://github.com/micronucleus/micronucleus/issues
+   
+ - Have a look at License.txt
+
+ - If you're going to write or change C or Ruby code, read Style Guide.txt
+ 
+ - When writing commit messages, please prefix your message with one of these:
+	   firmware:
+	   upgrade:
+	   commandline:
+	   ruby:
+	   tests:
+	 This will help us all understand what your commit is primarily in relation
+	 to when reading through the commit history hunting for specific changes.
+
+ - Please clean up your code-base before commits and make sure that the commit 
+   relates to the intended changes only. E.g. remnants of spurious edits like
+   randoms spaces or inserted/deleted lines should be avoided unless they are
+   part of intentional refactoring.
+
+ - This repository is for source code only. There are some exceptions, but these
+   are mostly legacy and in some cases relate to constraints that existed in the past. 
+   If you can contribute by cleaning up, this is highly appreciated!
+
+   Some notes regarding this:
+   - Documentation that is not directly relevant to the bootloader and compiling it
+     should go into the Wiki or elsewhere
+   - Executables should never be part of the repository. Releases are automatically
+     deployed as archives in the github release section.
+   - Currently the hex files are stored in the repository as a legacy. It would be
+     preferable to also build them using a CDCI process. This is work in progress.
+   - All documentation should use standard ASCII or proper markdown.
+   - Platform dependent build scripts should be avoided. 
+
+
