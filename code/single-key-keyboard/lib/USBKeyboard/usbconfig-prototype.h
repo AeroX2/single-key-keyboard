@@ -5,7 +5,7 @@
  * Tabsize: 4
  * Copyright: (c) 2005 by OBJECTIVE DEVELOPMENT Software GmbH
  * License: GNU GPL v2 (see License.txt), GNU GPL v3 or proprietary (CommercialLicense.txt)
- * This Revision: $Id: usbconfig-prototype.h 767 2009-08-22 11:39:22Z cs $
+ * TinyAvr1 TinyAvr0 code port by: 12oClocker 
  */
 
 #ifndef __usbconfig_h_included__
@@ -25,12 +25,25 @@ section at the end of this file).
 */
 
 /* ---------------------------- Hardware Config ---------------------------- */
+#define USB_CFG_TINYAVR_SERIES  1            // TinyAvr0 TinyAvr1 series enable
+#define USB_GPIOR0_REG          GPIO_GPIOR0  // 1st GPIO reg, specify which GPIO register to use
+#define USB_GPIOR0_MEM          0x1C         // 1st GPIO mem, memory location of above register (found in iotn1614.h)
+#define USB_GPIOR1_REG          GPIO_GPIOR1  // 2nd GPIO reg, specify which GPIO register to use
+#define USB_GPIOR1_MEM          0x1D         // 2nd GPIO mem, memory location of above register (found in iotn1614.h)
+/* TinyAvr0 and TinyAvr1 is differnt than standard AVR architechture.
+ * They do not clear flags on ISR exit. 
+ * Have different cycle counts for many opcodes.
+ * You must use VPORT for bit access routines.
+ * Memory mapping is different, thus use of GPIOR0,GPIOR1 registers above.
+ * 3 files have been modified for compatability... usbdrv.c usbdrv.h usbdrvasm.S
+ * files ending in _tas.c are the driver specific files to TinyAvr series.
+ */
 
-#define USB_CFG_IOPORTNAME      D
+#define USB_CFG_IOPORTNAME      A
 /* This is the port where the USB bus is connected. When you configure it to
  * "B", the registers PORTB, PINB and DDRB will be used.
  */
-#define USB_CFG_DMINUS_BIT      4
+#define USB_CFG_DMINUS_BIT      1
 /* This is the bit number in USB_CFG_IOPORT where the USB D- line is connected.
  * This may be any bit in the port.
  */
@@ -45,10 +58,12 @@ section at the end of this file).
  */
 #define USB_CFG_CLOCK_KHZ       (F_CPU/1000)
 /* Clock rate of the AVR in kHz. Legal values are 12000, 12800, 15000, 16000,
- * 16500 and 20000. The 12.8 MHz and 16.5 MHz versions of the code require no
- * crystal, they tolerate +/- 1% deviation from the nominal frequency. All
- * other rates require a precision of 2000 ppm and thus a crystal!
- * Default if not specified: 12 MHz
+ * 16500, 18000 and 20000. The 12.8 MHz and 16.5 MHz versions of the code
+ * require no crystal, they tolerate +/- 1% deviation from the nominal
+ * frequency. All other rates require a precision of 2000 ppm and thus a
+ * crystal!
+ * Since F_CPU should be defined to your actual clock rate anyway, you should
+ * not need to modify this setting.
  */
 #define USB_CFG_CHECK_CRC       0
 /* Define this to 1 if you want that the driver checks integrity of incoming
@@ -143,6 +158,11 @@ section at the end of this file).
 /* Define this to 1 if you want flowcontrol over USB data. See the definition
  * of the macros usbDisableAllRequests() and usbEnableAllRequests() in
  * usbdrv.h.
+ */
+#define USB_CFG_DRIVER_FLASH_PAGE       0
+/* If the device has more than 64 kBytes of flash, define this to the 64 k page
+ * where the driver's constants (descriptors) are located. Or in other words:
+ * Define this to 1 for boot loaders on the ATMega128.
  */
 #define USB_CFG_LONG_TRANSFERS          0
 /* Define this to 1 if you want to send/receive blocks of more than 254 bytes
@@ -349,6 +369,15 @@ section at the end of this file).
 #define USB_CFG_DESCR_PROPS_HID_REPORT              0
 #define USB_CFG_DESCR_PROPS_UNKNOWN                 0
 
+
+#define usbMsgPtr_t unsigned short
+/* If usbMsgPtr_t is not defined, it defaults to 'uchar *'. We define it to
+ * a scalar type here because gcc generates slightly shorter code for scalar
+ * arithmetics than for pointer arithmetics. Remove this define for backward
+ * type compatibility or define it to an 8 bit type if you use data in RAM only
+ * and all RAM is below 256 bytes (tiny memory model in IAR CC).
+ */
+
 /* ----------------------- Optional MCU Description ------------------------ */
 
 /* The following configurations have working defaults in usbdrv.h. You
@@ -364,6 +393,18 @@ section at the end of this file).
 /* #define USB_INTR_ENABLE_BIT     INT0 */
 /* #define USB_INTR_PENDING        GIFR */
 /* #define USB_INTR_PENDING_BIT    INTF0 */
-/* #define USB_INTR_VECTOR         SIG_INTERRUPT0 */
+/* #define USB_INTR_VECTOR         INT0_vect */
+
+/*
+//This is an example for TinyAvr0 TinyAvr1 series ... If any SOF logic is used, ISR must be wired to D-, and triggered on falling edge
+#define USB_INTR_CFG 			0		             //pin change control register
+#define USB_INTR_CFG_SET 		0                    //bits to set   for setting up USB_INTR_CFG
+#define USB_INTR_CFG_CLR 		0			         //bits to clear for setting up USB_INTR_CFG
+#define USB_INTR_ENABLE 		PORTA_PIN2CTRL       //interrupt register for detecting USB events (PORTA PIN2)
+#define USB_INTR_ENABLE_BIT 	1                    //setting bit 1 equals 0x02 equals PORT_ISC_RISING_gc, If SOF logic NOT used, ISR must be wired to D+, and triggered on rising edge
+#define USB_INTR_PENDING 		VPORTA_INTFLAGS		 //flag for detecting if pin ISR occured (must be VPORT so in legacy IO space)
+#define USB_INTR_PENDING_BIT 	VPORT_INT2_bp        //bit position to check if pin ISR occured (PORTA PIN2)
+#define USB_INTR_VECTOR 		PORTA_PORT_vect      //the interrupt ISR name for the pin change interrupt
+*/
 
 #endif /* __usbconfig_h_included__ */

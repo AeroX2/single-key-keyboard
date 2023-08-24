@@ -5,7 +5,7 @@
  * Tabsize: 4
  * Copyright: (c) 2007 by OBJECTIVE DEVELOPMENT Software GmbH
  * License: GNU GPL v2 (see License.txt), GNU GPL v3 or proprietary (CommercialLicense.txt)
- * Revision: $Id: usbdrvasm.S 785 2010-05-30 17:57:07Z cs $
+ * TinyAvr1 TinyAvr0 code port by: 12oClocker 
  */
 
 /*
@@ -33,8 +33,25 @@ the file appropriate for the given clock rate.
 
 /* Some assembler dependent definitions and declarations: */
 
+; ---------------------------------
+; ----TinyAvr1 specific defines----
+; ---------------------------------
+#if USB_CFG_TINYAVR_SERIES == 1
+	#define   nop_tas         nop             ;1 cycle
+	#define   nop2_tas        nop2            ;2 cycles
+	#define   nop3_tas        lpm             ;3 cycles
+	#define usbNewDeviceAddr  USB_GPIOR0_REG  ;also defined in usbdrv.c, I noticed their is an extern declare in usbdrvasm.S for IAR, I dont use IAR so not sure what will happen for that
+#else
+	#define   nop_tas            ;0 cycles
+	#define   nop2_tas           ;0 cycles
+	#ifdef __IAR_SYSTEMS_ASM__
+	extern usbNewDeviceAddr      ;Standard AVR method
+	#endif
+#endif
+; ---------------------------------
+
 #ifdef __IAR_SYSTEMS_ASM__
-    extern  usbRxBuf, usbDeviceAddr, usbNewDeviceAddr, usbInputBufOffset
+    extern  usbRxBuf, usbDeviceAddr, usbInputBufOffset
     extern  usbCurrentTok, usbRxLen, usbRxToken, usbTxLen
     extern  usbTxBuf, usbTxStatus1, usbTxStatus3
 #   if USB_COUNT_SOF

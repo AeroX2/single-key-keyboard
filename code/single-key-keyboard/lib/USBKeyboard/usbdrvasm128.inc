@@ -5,7 +5,7 @@
  * Tabsize: 4
  * Copyright: (c) 2008 by OBJECTIVE DEVELOPMENT Software GmbH
  * License: GNU GPL v2 (see License.txt), GNU GPL v3 or proprietary (CommercialLicense.txt)
- * This Revision: $Id: usbdrvasm128.inc 758 2009-08-06 10:12:54Z cs $
+ * TinyAvr1 TinyAvr0 code port by: 12oClocker 
  */
 
 /* Do not link this file! Link usbdrvasm.S instead, which includes the
@@ -81,6 +81,24 @@ layout of samples and operations:
 7:  [59]  60   61   62  <63>  64   65   66
 *****************************************************************************/
 
+/*
+,----Likely to cause the most issues with TinyAvr0 TinyAvr1 series...
+|  --AVR---|--TinyAvr-- CPU cycle differences for opcodes
+X  push  2  push  1
+X  cbi   2  cbi   1
+X  sbi   2  sbi   1
+X  st    2  st    1,2   1 cycles for SRAM, 2 cycles for FLASH or EEPROM
+X  std   2  std   1,2   1 cycles for SRAM, 2 cycles for FLASH or EEPROM
+   sts   2  sts   2,3   only different if NOT reading from SRAM
+X  lds   2  lds   3,4   3 cycles for SRAM, 4 cycles for FLASH or EEPROM
+   ld    2  ld    2,3   only different if NOT reading from SRAM
+   ldd   2  ldd   2,3   only different if NOT reading from SRAM
+   ret   4  ret   4,5   only different if NOT reading from SRAM
+   reti  4  reti  4,5   only different if NOT reading from SRAM
+   icall 3  icall 2,3
+   rcall 3  rcall 2,3
+*/
+
 /* we prefer positive expressions (do if condition) instead of negative
  * (skip if condition), therefore use defines for skip instructions:
  */
@@ -100,9 +118,17 @@ layout of samples and operations:
 
 USB_INTR_VECTOR:
 ;order of registers pushed: YL, SREG [sofError], YH, shift, x1, x2, x3, cnt, r0
+#if USB_CFG_TINYAVR_SERIES == 1
+    push    YL                             ;1  push only what is necessary to sync with edge ASAP
+    ldi     YL, (1<<USB_INTR_PENDING_BIT)  ;1  load value to clear ISR flag with
+    out     USB_INTR_PENDING,YL            ;1  clear the flag by writing the value to it     
+    in      YL, SREG                       ;1 
+    push    YL                             ;1 
+#else
     push    YL              ;2 push only what is necessary to sync with edge ASAP
     in      YL, SREG        ;1
     push    YL              ;2
+#endif
 ;----------------------------------------------------------------------------
 ; Synchronize with sync pattern:
 ;----------------------------------------------------------------------------
@@ -128,7 +154,7 @@ waitForK:
     sbis    USBIN, USBMINUS ;[0]
     rjmp    foundK          ;[1]
 #if USB_COUNT_SOF
-    lds     YL, usbSofCount
+    lds     YL, usbSofCount       ;TinyAvr1 is 3 for SRAM lds, standard avr is 2 cycles
     inc     YL
     sts     usbSofCount, YL
 #endif  /* USB_COUNT_SOF */
@@ -141,11 +167,11 @@ foundK:
 ;{3, 5} after falling D- edge, average delay: 4 cycles [we want 4 for center sampling]
 ;we have 1 bit time for setup purposes, then sample again. Numbers in brackets
 ;are cycles from center of first sync (double K) bit after the instruction
-    push    YH                  ;[2]
-    lds     YL, usbInputBufOffset;[4]
-    clr     YH                  ;[6]
-    subi    YL, lo8(-(usbRxBuf));[7]
-    sbci    YH, hi8(-(usbRxBuf));[8]
+    push    YH                    ;[2] TinyAvr is -1 cycles
+    lds     YL, usbInputBufOffset ;[4] TinyAvr is +1 cycles (we just evened out)
+    clr     YH                    ;[6]
+    subi    YL, lo8(-(usbRxBuf))  ;[7]
+    sbci    YH, hi8(-(usbRxBuf))  ;[8]
 
     sbis    USBIN, USBMINUS     ;[9] we want two bits K [we want to sample at 8 + 4 - 1.5 = 10.5]
     rjmp    haveTwoBitsK        ;[10]
@@ -161,12 +187,16 @@ haveTwoBitsK:
     push    shift               ;[12]
     push    x1                  ;[14]
     push    x2                  ;[16]
+    nop2_tas                    ;         TinyAvr1 push is -1 cycles, compenstate for 3 cycles
+    nop_tas                     ;         TinyAvr1 
     ldi     shift, 0x80         ;[18] prevent bit-unstuffing but init low bits to 0
     ifioset USBIN, USBMINUS     ;[19] [01] <--- bit 0 [10.5 + 8 = 18.5]
     ori     shift, 1<<0         ;[02]
     push    x3                  ;[03]
     push    cnt                 ;[05]
     push    r0                  ;[07]
+    nop2_tas                    ;         TinyAvr1 push is -1 cycles, compenstate for 3 cycles
+    nop_tas                     ;         TinyAvr1     
     ifioset USBIN, USBMINUS     ;[09] <--- bit 1
     ori     shift, 1<<1         ;[10]
     ser     fix                 ;[11]
@@ -220,6 +250,7 @@ unstuff0s:
     rjmp    bit0IsClr           ;[02] executed if first expr false or second true
 se0AndStore:                    ; executed only if both bits 0
     st      y+, x1              ;[15/17] cycles after start of byte
+    nop_tas                     ; TinyAvr1 st is 1 cycle less, compenstate
     rjmp    se0                 ;[17/19]
 
 bit0IsClr:
@@ -265,6 +296,7 @@ bit2IsClr:
     ori     shift, 1 << 2       ;[23]
 bit3AfterClr:
     st      y+, data            ;[24]
+    nop_tas                     ;     TinyAvr1 st is 1 cycle less, compenstate
 entryAfterClr:
     ifioset USBIN, USBMINUS     ;[26] <--- sample 3
     rjmp    bit3IsSet           ;[27]
@@ -427,6 +459,7 @@ bit2IsSet:
     ori     shift, 1 << 2       ;[23]
 bit3AfterSet:
     st      y+, data            ;[24]
+    nop_tas                     ;     TinyAvr1 st is 1 cycle less, compenstate
 entryAfterSet:
     ifioclr USBIN, USBMINUS     ;[26] <--- sample 3
     rjmp    bit3IsClr           ;[27]
@@ -553,8 +586,13 @@ sendNakAndReti:
 sendAckAndReti:
     ldi     cnt, USBPID_ACK ;[-17]
 sendCntAndReti:
+#if USB_CFG_TINYAVR_SERIES == 1
+    out		USB_GPIOR1_REG, cnt ;[-16] TinyAvr1 GPIO register, We are 1 extra cycle because of this, but because we are begining an XMT this is OK
+    ldi     YL, USB_GPIOR1_MEM  ;[-15] TinyAvr1 GPIO register, we use this because x3 does NOT memory map to 20 for TinyAvr1 series   
+#else
     mov     r0, cnt         ;[-16]
-    ldi     YL, 0           ;[-15] R0 address is 0
+    ldi     YL, 0           ;[-15] R0 address is 0  (does NOT work for TinyAvr0 TinyAvr1 series, memory mapping is different)
+#endif    
     ldi     YH, 0           ;[-14]
     ldi     cnt, 2          ;[-13]
 ;   rjmp    usbSendAndReti      fallthrough
@@ -574,6 +612,7 @@ usbSendAndReti:
     in      x2, USBDDR          ;[-10] 10 cycles until SOP
     ori     x2, USBMASK         ;[-9]
     sbi     USBOUT, USBMINUS    ;[-8] prepare idle state; D+ and D- must have been 0 (no pullups)
+    nop_tas                     ;     TinyAvr1 sbi is 1 less cycles, compenstate with nop, we may acquire bus 1 cycle early, probably ok
     out     USBDDR, x2          ;[-6] <--- acquire bus
     in      x1, USBOUT          ;[-5] port mirror for tx loop
     ldi     shift, 0x40         ;[-4] sync byte is first byte sent (we enter loop after ror)
@@ -629,8 +668,42 @@ common7:
     out     USBOUT, x1          ;[60] [00]<--- set bit
     brne    txByteLoop          ;[61] [01]
 ;make SE0:
+;--------------------------------------------------------------
+;--------makeSE0------- for TinyAvr0 TinyAvr1 -----------------
+;--------------------------------------------------------------
+#if USB_CFG_TINYAVR_SERIES == 1
     cbr     x1, USBMASK         ;[02] prepare SE0 [spec says EOP may be 15 to 18 cycles]
-    lds     x2, usbNewDeviceAddr;[03]
+    lds     x2, usbNewDeviceAddr;[03,04,05] TinyAvr1 uses 3 cycles instead of 2 and also usbNewDeviceAddr is defined as USB_GPIOR0_REG in usbdrv.c and in usbdrvasm.S
+    lsl     x2                  ;[06] we compare with left shifted address
+    nop                         ;[07]
+    out     USBOUT, x1          ;[00] <-- out SE0 -- from now 2 bits = 16 cycles until bus idle
+    subi    YL, 2 + 0           ;[01] Only assign address on data packets, not ACK/NAK in r0
+    sbci    YH, 0               ;[02]
+;2006-03-06: moved transfer of new address to usbDeviceAddr from C-Code to asm:
+;set address only after data packet was sent, not after handshake
+    breq    skipAddrAssign      ;[03,04]
+    sts     usbDeviceAddr, x2   ; if not skipped: SE0 is one cycle longer
+skipAddrAssign:
+;end of usbDeviceAddress transfer
+    ldi     x2, 1<<USB_INTR_PENDING_BIT;[05] int0 occurred during TX -- clear pending flag
+    USB_STORE_PENDING(x2)       ;[06]
+    ori     x1, USBIDLE         ;[07]
+    in      x2, USBDDR          ;[08]
+    cbr     x2, USBMASK         ;[09] set both pins to input
+    mov     x3, x1              ;[10]
+    cbr     x3, USBMASK         ;[11] configure no pullup on both pins
+    nop2                        ;[12,13]
+    nop2                        ;[14,15]
+    out     USBOUT, x1          ;[16] <-- out J (idle) -- end of SE0 (EOP signal)
+    out     USBDDR, x2          ;[17] <-- release bus now
+    out     USBOUT, x3          ;[18] <-- ensure no pull-up resistors are active
+    rjmp    doReturn
+;--------------------------------------------------------------
+;--------makeSE0------- for Standard AVR ----------------------
+;--------------------------------------------------------------
+#else
+    cbr     x1, USBMASK         ;[02] prepare SE0 [spec says EOP may be 15 to 18 cycles]
+    lds     x2, usbNewDeviceAddr;[03] TinyAvr1 uses 3 cycles instead of 2 and also usbNewDeviceAddr is defined as USB_GPIOR0_REG in usbdrv.c and in usbdrvasm.S
     lsl     x2                  ;[05] we compare with left shifted address
     subi    YL, 2 + 0           ;[06] Only assign address on data packets, not ACK/NAK in r0
     sbci    YH, 0               ;[07]
@@ -654,7 +727,7 @@ skipAddrAssign:
     out     USBDDR, x2          ;[17] <-- release bus now
     out     USBOUT, x3          ;[18] <-- ensure no pull-up resistors are active
     rjmp    doReturn
-
+#endif
 
 
 /*****************************************************************************
