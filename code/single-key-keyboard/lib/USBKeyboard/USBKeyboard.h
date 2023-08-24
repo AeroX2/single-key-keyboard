@@ -13,7 +13,9 @@
 #include <avr/delay.h>
 #include <string.h>
 
+extern "C" {
 #include "usbdrv.h"
+}
 #include "scancode-ascii-table.h"
 
 // TODO: Work around Arduino 12 issues better.
@@ -215,42 +217,35 @@ class USBKeyboardDevice : public Print {
 
 USBKeyboardDevice USBKeyboard = USBKeyboardDevice();
 
-#ifdef __cplusplus
-extern "C"{
-#endif
-  // USB_PUBLIC uchar usbFunctionSetup
-	uchar usbFunctionSetup(uchar data[8]) {
-    usbRequest_t    *rq = (usbRequest_t *)((void *)data);
+USB_PUBLIC usbMsgLen_t usbFunctionSetup(uchar data[8]) {
+  usbRequest_t    *rq = (usbRequest_t *)((void *)data);
 
-    usbMsgPtr = USBKeyboard.reportBuffer; //
-    if ((rq->bmRequestType & USBRQ_TYPE_MASK) == USBRQ_TYPE_CLASS) {
-      /* class request type */
+  usbMsgPtr = USBKeyboard.reportBuffer; //
+  if ((rq->bmRequestType & USBRQ_TYPE_MASK) == USBRQ_TYPE_CLASS) {
+    /* class request type */
 
-      if (rq->bRequest == USBRQ_HID_GET_REPORT) {
-				/* wValue: ReportType (highbyte), ReportID (lowbyte) */
+    if (rq->bRequest == USBRQ_HID_GET_REPORT) {
+      /* wValue: ReportType (highbyte), ReportID (lowbyte) */
 
-				/* we only have one report type, so don't look at wValue */
-        // TODO: Ensure it's okay not to return anything here?
-				return 0;
+      /* we only have one report type, so don't look at wValue */
+      // TODO: Ensure it's okay not to return anything here?
+      return 0;
 
-      } else if (rq->bRequest == USBRQ_HID_GET_IDLE) {
-				//usbMsgPtr = &idleRate;
-				//return 1;
-				return 0;
+    } else if (rq->bRequest == USBRQ_HID_GET_IDLE) {
+      //usbMsgPtr = &idleRate;
+      //return 1;
+      return 0;
 
-      } else if (rq->bRequest == USBRQ_HID_SET_IDLE) {
-				idleRate = rq->wValue.bytes[1];
+    } else if (rq->bRequest == USBRQ_HID_SET_IDLE) {
+      idleRate = rq->wValue.bytes[1];
 
-      }
-    } else {
-      /* no vendor specific requests implemented */
     }
-
-    return 0;
+  } else {
+    /* no vendor specific requests implemented */
   }
-#ifdef __cplusplus
-} // extern "C"
-#endif
+
+  return 0;
+}
 
 
 #endif // __USBKeyboard_h__

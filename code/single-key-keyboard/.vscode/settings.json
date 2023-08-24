@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "oddebug.h": "c",
+        "usbdrv.h": "c"
+    }
+}
