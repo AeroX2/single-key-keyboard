@@ -248,7 +248,7 @@ section at the end of this file).
  * with libusb: 0x16c0/0x5dc.  Use this VID/PID pair ONLY if you understand
  * the implications!
  */
-#define  USB_CFG_DEVICE_ID       0xdc, 0x05 /* = 0x05dc = 1500 */       
+#define  USB_CFG_DEVICE_ID       0xdb, 0x27 /* = 0x05dc = 1500 */       
 /* This is the ID of the product, low byte first. It is interpreted in the
  * scope of the vendor ID. If you have registered your own VID with usb.org
  * or if you have licensed a PID from somebody else, define it here. Otherwise
@@ -272,8 +272,8 @@ section at the end of this file).
  * obdev's free shared VID/PID pair. See the file USB-IDs-for-free.txt for
  * details.
  */
-#define USB_CFG_DEVICE_NAME     'T', 'e', 'm', 'p', 'l', 'a', 't', 'e'
-#define USB_CFG_DEVICE_NAME_LEN  8
+#define USB_CFG_DEVICE_NAME     'S', 'i', 'n', 'g', 'l', 'e', 'K', 'e', 'y', 'K', 'e', 'y', 'b', 'o', 'a', 'r', 'd'
+#define USB_CFG_DEVICE_NAME_LEN  17
 /* Same as above for the device name. If you don't want a device name, undefine
  * the macros. See the file USB-IDs-for-free.txt before you assign a name if
  * you use a shared VID/PID.
@@ -300,7 +300,6 @@ section at the end of this file).
  * HID class is 3, no subclass and protocol required (but may be useful!)
  * CDC class is 2, use subclass 2 and protocol 1 for ACM
  */
-// #define USB_CFG_HID_REPORT_DESCRIPTOR_LENGTH    34                                            //changed to 34, was undefined. Used in usb_desc.h and in usbdrv.c
 #define USB_CFG_HID_REPORT_DESCRIPTOR_LENGTH    42 
 /* Define this to the length of the HID report descriptor, if you implement
  * an HID device. Otherwise don't define it or define it to 0.
@@ -367,14 +366,14 @@ section at the end of this file).
  */
 
 #define USB_CFG_DESCR_PROPS_DEVICE                  0
-#define USB_CFG_DESCR_PROPS_CONFIGURATION           0 // USB_PROP_LENGTH( 41 ) //using custom usbDescriptorHidReport in usb_desc.h
+#define USB_CFG_DESCR_PROPS_CONFIGURATION           0
 #define USB_CFG_DESCR_PROPS_STRINGS                 0
 #define USB_CFG_DESCR_PROPS_STRING_0                0
 #define USB_CFG_DESCR_PROPS_STRING_VENDOR           0
 #define USB_CFG_DESCR_PROPS_STRING_PRODUCT          0
 #define USB_CFG_DESCR_PROPS_STRING_SERIAL_NUMBER    0
-#define USB_CFG_DESCR_PROPS_HID                     0 // USB_PROP_LENGTH( 9 ) //using custom in usb_desc.h
-#define USB_CFG_DESCR_PROPS_HID_REPORT              0 // USB_PROP_LENGTH( USB_CFG_HID_REPORT_DESCRIPTOR_LENGTH ) //using custom usbDescriptorHidReport in usb_desc.h
+#define USB_CFG_DESCR_PROPS_HID                     0
+#define USB_CFG_DESCR_PROPS_HID_REPORT              0
 #define USB_CFG_DESCR_PROPS_UNKNOWN                 0
 
 
@@ -407,11 +406,11 @@ section at the end of this file).
 #define USB_INTR_CFG 			0		             //pin change control register
 #define USB_INTR_CFG_SET 		0                    //bits to set   for setting up USB_INTR_CFG
 #define USB_INTR_CFG_CLR 		0			         //bits to clear for setting up USB_INTR_CFG
-#define USB_INTR_ENABLE 		PORTA_PIN2CTRL       //interrupt register for detecting USB events (PORTA PIN2)
+#define USB_INTR_ENABLE 		PORTB_PIN3CTRL       //interrupt register for detecting USB events (PORTA PIN2)
 #define USB_INTR_ENABLE_BIT 	1                    //setting bit 1 equals 0x02 equals PORT_ISC_RISING_gc, If SOF logic NOT used, ISR must be wired to D+, and triggered on rising edge
-#define USB_INTR_PENDING 		VPORTA_INTFLAGS		 //flag for detecting if pin ISR occured (must be VPORT so in legacy IO space)
-#define USB_INTR_PENDING_BIT 	VPORT_INT2_bp        //bit position to check if pin ISR occured (PORTA PIN2)
-#define USB_INTR_VECTOR 		PORTA_PORT_vect      //the interrupt ISR name for the pin change interrupt
+#define USB_INTR_PENDING 		VPORTB_INTFLAGS		 //flag for detecting if pin ISR occured (must be VPORT so in legacy IO space)
+#define USB_INTR_PENDING_BIT 	VPORT_INT3_bp        //bit position to check if pin ISR occured (PORTA PIN2)
+#define USB_INTR_VECTOR 		PORTB_PORT_vect      //the interrupt ISR name for the pin change interrupt
 
 
 #endif /* __usbconfig_h_included__ */
