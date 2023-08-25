@@ -215,6 +215,7 @@ class USBKeyboardDevice : public Print {
   using Print::write;
 };
 
+extern USBKeyboardDevice USBKeyboard;
 USB_PUBLIC usbMsgLen_t usbFunctionSetup(uchar data[8]) {
   usbRequest_t    *rq = (usbRequest_t *)((void *)data);
 

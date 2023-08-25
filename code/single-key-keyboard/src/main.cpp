@@ -1,5 +1,7 @@
 #include <Arduino.h>
+#include <EEPROM.h>
 #include <USBKeyboard.h>
+#include <HIDSerial.h>
 
 static inline void use16MHzOsc() {
   // setup main clk freq to 16MHz, we trim to 16.5MHz later
@@ -32,7 +34,9 @@ unsigned long debounceDelay = 50;    // the debounce time;
 bool writeMode = false;
 
 USBKeyboardDevice USBKeyboard;
-// HIDDevice HIDDevice;
+HIDSerialDevice HIDSerial;
+
+char keyboardString[256];
 
 void setup() { 
   use16MHzOsc();
@@ -45,17 +49,19 @@ void setup() {
 
   if (writeMode) {
     USBKeyboard = USBKeyboardDevice();
-  } else {
-    // HIDDevice = HIDDevice();
-  }
-}
 
-void loop() {
-  if (writeMode) {
-    keyboardUpdate();
+    short i = 0;
+    char c;
+    do {
+      c = EEPROM.read(i++);
+      keyboardString[i] = c;
+    } while (i < 255 && c != 0);
+    keyboardString[i] = 0;
+
   } else {
-    hidSerialUpdate();
-  } 
+    HIDSerial = HIDSerialDevice();
+    HIDSerial.begin();
+  }
 }
 
 void keyboardUpdate() {
@@ -78,7 +84,7 @@ void keyboardUpdate() {
 
       if (buttonState == LOW) {
         USBKeyboard.sendKeyStroke(0);
-        USBKeyboard.println("Hello World!");
+        USBKeyboard.println(keyboardString);
       }
     }
   }
@@ -92,6 +98,37 @@ void keyboardUpdate() {
   USBKeyboard.delay(50);
 }
 
+unsigned long lastSerialTime = 0;
 void hidSerialUpdate() {
+  if (millis() - lastSerialTime > 20000) {
+    HIDSerial.print("Current string: ");
+    HIDSerial.println("Hello world!");
+    HIDSerial.print("Enter a new string: ");
+  }
 
+  while (HIDSerial.available()) {
+    unsigned char* buffer = new unsigned char[256];
+    HIDSerial.read(buffer);
+
+    short c;
+    for (c = 0; c < 255 && buffer[c] != 0; c++) {
+      EEPROM.write(c, buffer[c]);
+    }
+    EEPROM.write(c, 0);
+
+    HIDSerial.print("New string is: ");
+    HIDSerial.println((char*)buffer);
+    HIDSerial.println("String has been saved, please slide the switch and reboot");
+  }
+
+  lastSerialTime = millis();
+  HIDSerial.poll();
+}
+
+void loop() {
+  if (writeMode) {
+    keyboardUpdate();
+  } else {
+    hidSerialUpdate();
+  } 
 }
