@@ -1,67 +1,60 @@
 #include <Arduino.h>
 #include <EEPROM.h>
-#include <USBKeyboard.h>
-#include <HIDSerial.h>
+#include <USBKeyboardOrSerial.h>
+
+#define BUTTON PIN_PA3
+#define SWITCH PIN_PA4
+#define LED PIN_PB2
+
+#define DEBOUNCE_DELAY 50
+
+bool buttonState;
+bool lastButtonState = LOW;
+bool keyboardMode = false;
+
+unsigned long lastDebounceTime = 0;
+unsigned long lastSerialTime = 0;
+
+char keyboardString[90];
 
 static inline void use16MHzOsc() {
   // setup main clk freq to 16MHz, we trim to 16.5MHz later
   // programming fuses will set BOD, and 16MHz or 20MHz
   // datasheet pg550 BODLEVEL2 only guaranteed to 10MHz
   // use 0x02 (OSCCFG) value must be 0x02, for 16MHz fuse must be 0x01
-  _PROTECTED_WRITE(CLKCTRL_MCLKCTRLB,
-                   0x00);  // no prescaler = 0x00, prescaler enable =
-                           // CLKCTRL_PEN_bm (default prescaler is div2)
+  _PROTECTED_WRITE(CLKCTRL_MCLKCTRLB, 0x00);
+  // no prescaler = 0x00, prescaler enable =
+  // CLKCTRL_PEN_bm (default prescaler is div2)
   while ((CLKCTRL_MCLKSTATUS & CLKCTRL_OSC20MS_bm) == 0)
-    ;  // pg88 wait for OSC20MS to become stable
+    ;
+  // pg88 wait for OSC20MS to become stable
 
   // VUSB will trim to 16.5MHz
 }
 
-#define BUTTON PIN_PA3
-#define SWITCH PIN_PA4
-#define LED PIN_PB2
-
-// Variables will change:
-int buttonState;            // the current reading from the input pin
-int lastButtonState = LOW;  // the previous reading from the input pin
-
-// the following variables are unsigned longs because the time, measured in
-// milliseconds, will quickly become a bigger number than can be stored in an
-// int.
-unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
-unsigned long debounceDelay = 50;    // the debounce time;
-
-bool writeMode = false;
-
-USBKeyboardDevice USBKeyboard;
-HIDSerialDevice HIDSerial;
-
-char keyboardString[256];
-
-void setup() { 
+void setup() {
   use16MHzOsc();
   pinMode(BUTTON, INPUT_PULLUP);
   pinMode(SWITCH, INPUT_PULLUP);
 
-  delay(500);
+  // keyboardMode = digitalRead(SWITCH);
 
-  writeMode = digitalRead(SWITCH);
+  // if (keyboardMode) {
+  //   char c = EEPROM.read(0);
+  //   if (c == 0) {
+      // strcpy(keyboardString, "Hello World from #club-keyboard!");
+  //   } else {
+  //     short i = 0;
+  //     while (i < 255 && c != 0) {
+  //       c = EEPROM.read(i++);
+  //       keyboardString[i] = c;
+  //     }
+  //     keyboardString[i] = 0;
+  //   }
+  // }
 
-  if (writeMode) {
-    USBKeyboard = USBKeyboardDevice();
-
-    short i = 0;
-    char c;
-    do {
-      c = EEPROM.read(i++);
-      keyboardString[i] = c;
-    } while (i < 255 && c != 0);
-    keyboardString[i] = 0;
-
-  } else {
-    HIDSerial = HIDSerialDevice();
-    HIDSerial.begin();
-  }
+  // USBKeyboardOrSerial.setMode(keyboardMode);
+  // USBKeyboardOrSerial.init();
 }
 
 void keyboardUpdate() {
@@ -78,57 +71,58 @@ void keyboardUpdate() {
     lastDebounceTime = millis();
   }
 
-  if ((millis() - lastDebounceTime) > debounceDelay) {
+  if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
     if (reading != buttonState) {
       buttonState = reading;
 
       if (buttonState == LOW) {
-        USBKeyboard.sendKeyStroke(0);
-        USBKeyboard.println(keyboardString);
+        USBKeyboardOrSerial.sendKeyStroke(0);
+        USBKeyboardOrSerial.println(keyboardString);
       }
     }
   }
 
   // save the reading. Next time through the loop, it'll be the lastButtonState:
   lastButtonState = reading;
-
-  // It's better to use DigiKeyboard.delay() over the regular Arduino delay()
-  // if doing keyboard stuff because it keeps talking to the computer to make
-  // sure the computer knows the keyboard is alive and connected
-  USBKeyboard.delay(50);
 }
 
-unsigned long lastSerialTime = 0;
 void hidSerialUpdate() {
   if (millis() - lastSerialTime > 20000) {
-    HIDSerial.print("Current string: ");
-    HIDSerial.println("Hello world!");
-    HIDSerial.print("Enter a new string: ");
+    USBKeyboardOrSerial.print("Current string: ");
+    USBKeyboardOrSerial.println(keyboardString);
+    USBKeyboardOrSerial.print("Enter a new string: ");
   }
 
-  while (HIDSerial.available()) {
-    unsigned char* buffer = new unsigned char[256];
-    HIDSerial.read(buffer);
+  while (USBKeyboardOrSerial.available()) {
+    unsigned char* buffer = new unsigned char[90];
+    USBKeyboardOrSerial.read(buffer);
 
     short c;
-    for (c = 0; c < 255 && buffer[c] != 0; c++) {
+    for (c = 0; c < 90 && buffer[c] != 0; c++) {
       EEPROM.write(c, buffer[c]);
     }
     EEPROM.write(c, 0);
 
-    HIDSerial.print("New string is: ");
-    HIDSerial.println((char*)buffer);
-    HIDSerial.println("String has been saved, please slide the switch and reboot");
+    USBKeyboardOrSerial.print("New string is: ");
+    USBKeyboardOrSerial.println((char*)buffer);
+    USBKeyboardOrSerial.println("Please reboot");
   }
 
   lastSerialTime = millis();
-  HIDSerial.poll();
 }
 
 void loop() {
-  if (writeMode) {
-    keyboardUpdate();
-  } else {
-    hidSerialUpdate();
-  } 
+  USBKeyboardOrSerial.sendKeyStroke(0);
+
+  USBKeyboardOrSerial.println("Frog");
+  // if (keyboardMode) {
+  //   keyboardUpdate();
+  // } else {
+  //   hidSerialUpdate();
+  // }
+
+  // It's better to use DigiKeyboard.delay() over the regular Arduino delay()
+  // if doing keyboard stuff because it keeps talking to the computer to make
+  // sure the computer knows the keyboard is alive and connected
+  USBKeyboardOrSerial.delay(5000);
 }
