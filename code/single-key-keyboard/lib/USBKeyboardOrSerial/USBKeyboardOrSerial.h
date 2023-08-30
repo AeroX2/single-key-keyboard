@@ -12,6 +12,7 @@
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include <string.h>
+#include <util/atomic.h>
 
 extern "C" {
 #include "usbdrv.h"
@@ -75,26 +76,27 @@ const PROGMEM char usbHidReportDescriptorSerial[29] = {
     0xc0   // END_COLLECTION
 };
 
-const PROGMEM char usbHidReportDescriptor[USB_CFG_HID_REPORT_DESCRIPTOR_LENGTH] = {
-    /* USB report descriptor */
-    0x05, 0x01,  // USAGE_PAGE (Generic Desktop)
-    0x09, 0x06,  // USAGE (Keyboard)
-    0xa1, 0x01,  // COLLECTION (Application)
-    0x05, 0x07,  //   USAGE_PAGE (Keyboard)
-    0x19, 0xe0,  //   USAGE_MINIMUM (Keyboard LeftControl)
-    0x29, 0xe7,  //   USAGE_MAXIMUM (Keyboard Right GUI)
-    0x15, 0x00,  //   LOGICAL_MINIMUM (0)
-    0x25, 0x01,  //   LOGICAL_MAXIMUM (1)
-    0x75, 0x01,  //   REPORT_SIZE (1)
-    0x95, 0x08,  //   REPORT_COUNT (8)
-    0x81, 0x02,  //   INPUT (Data,Var,Abs)
-    0x95, 0x01,  //   REPORT_COUNT (simultaneous keystrokes)
-    0x75, 0x08,  //   REPORT_SIZE (8)
-    0x25, 0x65,  //   LOGICAL_MAXIMUM (101)
-    0x19, 0x00,  //   USAGE_MINIMUM (Reserved (no event indicated))
-    0x29, 0x65,  //   USAGE_MAXIMUM (Keyboard Application)
-    0x81, 0x00,  //   INPUT (Data,Ary,Abs)
-    0xc0         // END_COLLECTION
+const PROGMEM char
+    usbHidReportDescriptor[USB_CFG_HID_REPORT_DESCRIPTOR_LENGTH] = {
+        /* USB report descriptor */
+        0x05, 0x01,  // USAGE_PAGE (Generic Desktop)
+        0x09, 0x06,  // USAGE (Keyboard)
+        0xa1, 0x01,  // COLLECTION (Application)
+        0x05, 0x07,  //   USAGE_PAGE (Keyboard)
+        0x19, 0xe0,  //   USAGE_MINIMUM (Keyboard LeftControl)
+        0x29, 0xe7,  //   USAGE_MAXIMUM (Keyboard Right GUI)
+        0x15, 0x00,  //   LOGICAL_MINIMUM (0)
+        0x25, 0x01,  //   LOGICAL_MAXIMUM (1)
+        0x75, 0x01,  //   REPORT_SIZE (1)
+        0x95, 0x08,  //   REPORT_COUNT (8)
+        0x81, 0x02,  //   INPUT (Data,Var,Abs)
+        0x95, 0x01,  //   REPORT_COUNT (simultaneous keystrokes)
+        0x75, 0x08,  //   REPORT_SIZE (8)
+        0x25, 0x65,  //   LOGICAL_MAXIMUM (101)
+        0x19, 0x00,  //   USAGE_MINIMUM (Reserved (no event indicated))
+        0x29, 0x65,  //   USAGE_MAXIMUM (Keyboard Application)
+        0x81, 0x00,  //   INPUT (Data,Ary,Abs)
+        0xc0         // END_COLLECTION
 };
 
 /* Keyboard usage values, see usb.org's HID-usage-tables document, chapter
@@ -168,9 +170,69 @@ const PROGMEM char usbHidReportDescriptor[USB_CFG_HID_REPORT_DESCRIPTOR_LENGTH] 
 #define KEY_ARROW_LEFT 80
 #define KEY_ARROW_RIGHT 79
 
+static inline void usbCalibrateOsc() {
+  // setup main clk freq to 16MHz, we trim to 16.5MHz later
+  // programming fuses will set BOD, and 16MHz or 20MHz
+  // datasheet pg550 BODLEVEL2 only guaranteed to 10MHz
+  // use 0x02 (OSCCFG) value must be 0x02, for 16MHz fuse must be 0x01
+  _PROTECTED_WRITE(CLKCTRL_MCLKCTRLB, 0x00);
+  // no prescaler = 0x00, prescaler enable =
+  // CLKCTRL_PEN_bm (default prescaler is div2)
+  while ((CLKCTRL_MCLKSTATUS & CLKCTRL_OSC20MS_bm) == 0)
+    ;
+  // pg88 wait for OSC20MS to become stable
+
+  // VUSB will trim to 16.5MHz
+
+  // 16.5MHz will be 2356 (we want to arrive at this point)
+  // 16.0MHz will be 2284 (internal oscillator at 16MHz starts at about this
+  // point) 12.8MHz will be 1827 (we want to arrive at this point)
+  int16_t targetValue =
+      2356;  //(unsigned)(1499 * (double)F_CPU / 10.5e6 + 0.5); //10.5e6 is
+             //10500000 //targetValue should be 2356 for 16.5MHz
+  uint8_t tmp = CLKCTRL_OSC20MCALIBA;  // oscilator default calibration value
+
+  // trim to 16.5MHz or 12.8MHz
+  //  https://www.silabs.com/community/interface/knowledge-base.entry.html/2004/03/15/usb_clock_tolerance-gVai
+  //  http://vusb.wikidot.com/examples
+  uint8_t sav = tmp;
+  int16_t low = 32767;  // lowest saved value
+  while (1)             // normally solves in about 5 itterations
+  {
+    int16_t cur =
+        usbMeasureFrameLength() -
+        targetValue;  // we expect cur to be negative numbers until we overshoot
+
+    int16_t curabs = cur;
+    if (curabs < 0) {
+      curabs = -curabs;
+    }  // make a positive number, so we know how far away from zero it is
+    if (curabs < low)  // current value is lower
+    {
+      low = curabs;  // got a new lower value, save it
+      sav = tmp;     // save the OSC CALB value
+    } else  // things just got worse, curabs > low, so saved value before this
+            // was the best value
+    {
+      _PROTECTED_WRITE(CLKCTRL_OSC20MCALIBA, sav);
+      return;
+    }
+
+    if (cur < 0)  // freq too high
+    {
+      tmp++;
+    }     //+1 will increase frequency by about 1%
+    else  // freq too low
+    {
+      tmp--;
+    }  //-1 will increase frequency by about 1%
+    // apply change and check again
+    _PROTECTED_WRITE(CLKCTRL_OSC20MCALIBA, tmp);
+  }
+}
+
 class USBKeyboardOrSerialDevice : public Print {
  public:
-
   void setMode(bool _keyboardMode) { keyboardMode = _keyboardMode; }
 
   // void init() {
@@ -181,6 +243,8 @@ class USBKeyboardOrSerialDevice : public Print {
     //        USB_CFG_HID_REPORT_DESCRIPTOR_LENGTH);
 
     cli();
+    ATOMIC_BLOCK(ATOMIC_FORCEON) { usbCalibrateOsc(); }
+
     usbDeviceDisconnect();
     _delay_ms(250);
     usbDeviceConnect();
@@ -244,7 +308,7 @@ class USBKeyboardOrSerialDevice : public Print {
   size_t write(uint8_t chr) {
     if (keyboardMode) {
       uint8_t data = pgm_read_byte_near(ascii_to_scan_code_table + (chr - 8));
-      sendData(data & 0b01111111, data >> 7 ? MOD_SHIFT_RIGHT : 0);
+      sendKeyStroke(data & 0b01111111, data >> 7 ? MOD_SHIFT_RIGHT : 0);
       return 1;
     } else {
       sendData(0, chr);
@@ -269,7 +333,7 @@ class USBKeyboardOrSerialDevice : public Print {
   // write a string
   size_t write(const uint8_t *buffer, size_t size) {
     if (keyboardMode) {
-      return this->write(buffer, size);
+      return Print::write(buffer, size);
     }
 
     size_t count = 0;
@@ -352,7 +416,8 @@ USB_PUBLIC usbMsgLen_t usbFunctionSetup(uchar data[8]) {
       //     sizeof(USBKeyboardOrSerial.inBuffer))
       //   USBKeyboardOrSerial.bytesRemaining =
       //       sizeof(USBKeyboardOrSerial.inBuffer);
-      // return USB_NO_MSG; /* use usbFunctionWrite() to receive data from host */
+      // return USB_NO_MSG; /* use usbFunctionWrite() to receive data from host
+      // */
     } else if (rq->bRequest == USBRQ_HID_GET_IDLE) {
       return 0;
     } else if (rq->bRequest == USBRQ_HID_SET_IDLE) {

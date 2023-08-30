@@ -59,7 +59,7 @@ section at the end of this file).
  * interrupt, the USB interrupt will also be triggered at Start-Of-Frame
  * markers every millisecond.]
  */
-#define USB_CFG_CLOCK_KHZ       (F_CPU/1000)
+#define USB_CFG_CLOCK_KHZ       (16500000/1000)
 /* Clock rate of the AVR in kHz. Legal values are 12000, 12800, 15000, 16000,
  * 16500, 18000 and 20000. The 12.8 MHz and 16.5 MHz versions of the code
  * require no crystal, they tolerate +/- 1% deviation from the nominal
@@ -96,7 +96,7 @@ section at the end of this file).
  * default control endpoint 0 and an interrupt-in endpoint (any other endpoint
  * number).
  */
-#define USB_CFG_HAVE_INTRIN_ENDPOINT3   0                                             //changed to 1, default was 3
+#define USB_CFG_HAVE_INTRIN_ENDPOINT3   0
 /* Define this to 1 if you want to compile a version with three endpoints: The
  * default control endpoint 0, an interrupt-in endpoint 3 (or the number
  * configured below) and a catch-all default interrupt-in endpoint as above.
@@ -287,14 +287,14 @@ section at the end of this file).
  * to fine tune control over USB descriptors such as the string descriptor
  * for the serial number.
  */
-#define USB_CFG_DEVICE_CLASS        0  //0xff    /* set to 0 if deferred to interface */      //changed to 0, was 0xff
+#define USB_CFG_DEVICE_CLASS        0  //0xff    /* set to 0 if deferred to interface */
 #define USB_CFG_DEVICE_SUBCLASS     0
 /* See USB specification if you want to conform to an existing device class.
  * Class 0xff is "vendor specific".
  */
-#define USB_CFG_INTERFACE_CLASS     3  //0   /* define class here if not at device level */   //changed to 3, was 0
-#define USB_CFG_INTERFACE_SUBCLASS  1
-#define USB_CFG_INTERFACE_PROTOCOL  1
+#define USB_CFG_INTERFACE_CLASS     3  //0   /* define class here if not at device level */
+#define USB_CFG_INTERFACE_SUBCLASS  0
+#define USB_CFG_INTERFACE_PROTOCOL  0
 /* See USB specification if you want to conform to an existing device class or
  * protocol. The following classes must be set at interface level:
  * HID class is 3, no subclass and protocol required (but may be useful!)
@@ -406,10 +406,10 @@ section at the end of this file).
 #define USB_INTR_CFG 			0		             //pin change control register
 #define USB_INTR_CFG_SET 		0                    //bits to set   for setting up USB_INTR_CFG
 #define USB_INTR_CFG_CLR 		0			         //bits to clear for setting up USB_INTR_CFG
-#define USB_INTR_ENABLE 		PORTB_PIN3CTRL       //interrupt register for detecting USB events (PORTA PIN2)
+#define USB_INTR_ENABLE 		PORTB_PIN4CTRL       //interrupt register for detecting USB events (PORTA PIN2)
 #define USB_INTR_ENABLE_BIT 	1                    //setting bit 1 equals 0x02 equals PORT_ISC_RISING_gc, If SOF logic NOT used, ISR must be wired to D+, and triggered on rising edge
 #define USB_INTR_PENDING 		VPORTB_INTFLAGS		 //flag for detecting if pin ISR occured (must be VPORT so in legacy IO space)
-#define USB_INTR_PENDING_BIT 	VPORT_INT3_bp        //bit position to check if pin ISR occured (PORTA PIN2)
+#define USB_INTR_PENDING_BIT 	VPORT_INT4_bp        //bit position to check if pin ISR occured (PORTA PIN2)
 #define USB_INTR_VECTOR 		PORTB_PORT_vect      //the interrupt ISR name for the pin change interrupt
 
 

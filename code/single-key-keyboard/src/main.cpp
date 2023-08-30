@@ -17,23 +17,8 @@ unsigned long lastSerialTime = 0;
 
 char keyboardString[90];
 
-static inline void use16MHzOsc() {
-  // setup main clk freq to 16MHz, we trim to 16.5MHz later
-  // programming fuses will set BOD, and 16MHz or 20MHz
-  // datasheet pg550 BODLEVEL2 only guaranteed to 10MHz
-  // use 0x02 (OSCCFG) value must be 0x02, for 16MHz fuse must be 0x01
-  _PROTECTED_WRITE(CLKCTRL_MCLKCTRLB, 0x00);
-  // no prescaler = 0x00, prescaler enable =
-  // CLKCTRL_PEN_bm (default prescaler is div2)
-  while ((CLKCTRL_MCLKSTATUS & CLKCTRL_OSC20MS_bm) == 0)
-    ;
-  // pg88 wait for OSC20MS to become stable
-
-  // VUSB will trim to 16.5MHz
-}
-
 void setup() {
-  use16MHzOsc();
+  pinMode(LED, OUTPUT);
   pinMode(BUTTON, INPUT_PULLUP);
   pinMode(SWITCH, INPUT_PULLUP);
 
@@ -112,17 +97,15 @@ void hidSerialUpdate() {
 }
 
 void loop() {
-  USBKeyboardOrSerial.sendKeyStroke(0);
-
-  USBKeyboardOrSerial.println("Frog");
-  // if (keyboardMode) {
-  //   keyboardUpdate();
-  // } else {
-  //   hidSerialUpdate();
-  // }
-
   // It's better to use DigiKeyboard.delay() over the regular Arduino delay()
   // if doing keyboard stuff because it keeps talking to the computer to make
   // sure the computer knows the keyboard is alive and connected
-  USBKeyboardOrSerial.delay(5000);
+  digitalWrite(LED, HIGH);
+  USBKeyboardOrSerial.delay(2500);
+  digitalWrite(LED, LOW);
+  USBKeyboardOrSerial.delay(2500);
+
+  USBKeyboardOrSerial.sendKeyStroke(0);
+
+  USBKeyboardOrSerial.println("Frog");
 }
