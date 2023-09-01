@@ -7,16 +7,14 @@
 #ifndef __USBKeyboardOrSerial_h__
 #define __USBKeyboardOrSerial_h__
 
-#include <Arduino.h>
 #include <avr/delay.h>
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include <string.h>
-#include <util/atomic.h>
 
-extern "C" {
+// extern "C" {
 #include "usbdrv.h"
-}
+// }
 #include "scancode-ascii-table.h"
 
 typedef uint8_t byte;
@@ -25,63 +23,13 @@ typedef uint8_t byte;
 
 static uchar idleRate;  // in 4 ms units
 
-/* We use a simplifed keyboard report descriptor which does not support the
- * boot protocol. We don't allow setting status LEDs and but we do allow
- * simultaneous key presses.
- * The report descriptor has been created with usb.org's "HID Descriptor Tool"
- * which can be downloaded from http://www.usb.org/developers/hidpage/.
- * Redundant entries (such as LOGICAL_MINIMUM and USAGE_PAGE) have been omitted
- * for the second INPUT item.
- */
-const PROGMEM char usbHidReportDescriptorKeyboard[35] = {
-    /* USB report descriptor */
-    0x05, 0x01,  // USAGE_PAGE (Generic Desktop)
-    0x09, 0x06,  // USAGE (Keyboard)
-    0xa1, 0x01,  // COLLECTION (Application)
-    0x05, 0x07,  //   USAGE_PAGE (Keyboard)
-    0x19, 0xe0,  //   USAGE_MINIMUM (Keyboard LeftControl)
-    0x29, 0xe7,  //   USAGE_MAXIMUM (Keyboard Right GUI)
-    0x15, 0x00,  //   LOGICAL_MINIMUM (0)
-    0x25, 0x01,  //   LOGICAL_MAXIMUM (1)
-    0x75, 0x01,  //   REPORT_SIZE (1)
-    0x95, 0x08,  //   REPORT_COUNT (8)
-    0x81, 0x02,  //   INPUT (Data,Var,Abs)
-    0x95, 0x01,  //   REPORT_COUNT (simultaneous keystrokes)
-    0x75, 0x08,  //   REPORT_SIZE (8)
-    0x25, 0x65,  //   LOGICAL_MAXIMUM (101)
-    0x19, 0x00,  //   USAGE_MINIMUM (Reserved (no event indicated))
-    0x29, 0x65,  //   USAGE_MAXIMUM (Keyboard Application)
-    0x81, 0x00,  //   INPUT (Data,Ary,Abs)
-    0xc0         // END_COLLECTION
-};
-
-const PROGMEM char usbHidReportDescriptorSerial[29] = {
-    /* USB report descriptor */
-    0x06, 0x00,
-    0xff,        // USAGE_PAGE (Generic Desktop)
-    0x09, 0x01,  // USAGE (Vendor Usage 1)
-    0xa1, 0x01,  // COLLECTION (Application)
-    0x15, 0x00,  //   LOGICAL_MINIMUM (0)
-    0x26, 0xff,
-    0x00,        //   LOGICAL_MAXIMUM (255)
-    0x75, 0x08,  //   REPORT_SIZE (8)
-    0x95, 0x08,  //   REPORT_COUNT (8)
-    0x09, 0x00,  //   USAGE (Undefined)
-    0x82, 0x02,
-    0x01,                           //   INPUT (Data,Var,Abs,Buf)
-    0x95, HIDSERIAL_INBUFFER_SIZE,  //   REPORT_COUNT (32)
-    0x09, 0x00,                     //   USAGE (Undefined)
-    0xb2, 0x02,
-    0x01,  //   FEATURE (Data,Var,Abs,Buf)
-    0xc0   // END_COLLECTION
-};
-
 const PROGMEM char
     usbHidReportDescriptor[USB_CFG_HID_REPORT_DESCRIPTOR_LENGTH] = {
         /* USB report descriptor */
         0x05, 0x01,  // USAGE_PAGE (Generic Desktop)
         0x09, 0x06,  // USAGE (Keyboard)
         0xa1, 0x01,  // COLLECTION (Application)
+        0x85, 0x01,  // Report ID
         0x05, 0x07,  //   USAGE_PAGE (Keyboard)
         0x19, 0xe0,  //   USAGE_MINIMUM (Keyboard LeftControl)
         0x29, 0xe7,  //   USAGE_MAXIMUM (Keyboard Right GUI)
@@ -96,7 +44,22 @@ const PROGMEM char
         0x19, 0x00,  //   USAGE_MINIMUM (Reserved (no event indicated))
         0x29, 0x65,  //   USAGE_MAXIMUM (Keyboard Application)
         0x81, 0x00,  //   INPUT (Data,Ary,Abs)
-        0xc0         // END_COLLECTION
+        0xc0,         // END_COLLECTION
+
+        0x06, 0x00, 0xFF,  // Usage Page (Vendor Defined 0xFF00)
+        0x09, 0x01,        // Usage (0x01)
+        0xA1, 0x01,        // Collection (Application)
+        0x85, 0x02,  // Report ID
+        0x15, 0x00,        //   Logical Minimum (0)
+        0x26, 0xFF, 0x00,  //   Logical Maximum (255)
+        0x75, 0x08,        //   Report Size (8)
+        0x95, 0x08,        //   Report Count (8)
+        0x09, 0x00,        //   Usage (0x00)
+        0x82, 0x02, 0x01,  //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Buffered Bytes)
+        0x95, 0x08,        //   Report Count (8)
+        0x09, 0x00,        //   Usage (0x00)
+        0xB2, 0x02, 0x01,  //   Feature (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile,Buffered Bytes)
+        0xC0,              // End Collection
 };
 
 /* Keyboard usage values, see usb.org's HID-usage-tables document, chapter
@@ -170,6 +133,16 @@ const PROGMEM char
 #define KEY_ARROW_LEFT 80
 #define KEY_ARROW_RIGHT 79
 
+  int keyboardMode = 1;
+
+  uchar inBuffer[HIDSERIAL_INBUFFER_SIZE];
+  uchar outBuffer[8];
+
+  uchar received = 0;
+  uchar reportId = 0;
+  uchar bytesRemaining;
+  uchar *pos;
+
 static inline void usbCalibrateOsc() {
   // setup main clk freq to 16MHz, we trim to 16.5MHz later
   // programming fuses will set BOD, and 16MHz or 20MHz
@@ -231,19 +204,13 @@ static inline void usbCalibrateOsc() {
   }
 }
 
-class USBKeyboardOrSerialDevice : public Print {
- public:
-  void setMode(bool _keyboardMode) { keyboardMode = _keyboardMode; }
+// class USBKeyboardOrSerialDevice {
+//  public:
+  void setMode(int _keyboardMode) { keyboardMode = _keyboardMode; }
 
-  // void init() {
-  USBKeyboardOrSerialDevice() {
-    // memcpy((void *)usbHidReportDescriptor,
-    //        keyboardMode ? usbHidReportDescriptorKeyboard
-    //                     : usbHidReportDescriptorSerial,
-    //        USB_CFG_HID_REPORT_DESCRIPTOR_LENGTH);
-
+  void init() {
     cli();
-    ATOMIC_BLOCK(ATOMIC_FORCEON) { usbCalibrateOsc(); }
+    usbCalibrateOsc();
 
     usbDeviceDisconnect();
     _delay_ms(250);
@@ -262,29 +229,15 @@ class USBKeyboardOrSerialDevice : public Print {
   void update() { usbPoll(); }
 
   // delay while updating until we are finished delaying
-  void delay(long milli) {
-    unsigned long last = millis();
-    while (milli > 0) {
-      unsigned long now = millis();
-      milli -= now - last;
-      last = now;
-      update();
-    }
-  }
-
-  // sendKeyStroke: sends a key press AND release
-  void sendKeyStroke(byte keyStroke) { sendKeyStroke(keyStroke, 0); }
-
-  // sendKeyStroke: sends a key press AND release with modifiers
-  void sendKeyStroke(byte keyStroke, byte modifiers) {
-    sendData(keyStroke, modifiers);
-    // This stops endlessly repeating keystrokes:
-    sendData(0, 0);
-  }
-
-  // sendKeyPress: sends a key press only - no release
-  // to release the key, send again with keyPress=0
-  void sendKeyPress(byte keyPress) { sendData(keyPress, 0); }
+  // void delay(long milli) {
+  //   unsigned long last = millis();
+  //   while (milli > 0) {
+  //     unsigned long now = millis();
+  //     milli -= now - last;
+  //     last = now;
+  //     update();
+  //   }
+  // }
 
   // sendKeyPress: sends a key press only, with modifiers - no release
   // to release the key, send again with keyPress=0
@@ -305,9 +258,25 @@ class USBKeyboardOrSerialDevice : public Print {
     usbSetInterrupt(outBuffer, sizeof(outBuffer));
   }
 
+  // sendKeyStroke: sends a key press AND release with modifiers
+  void sendKeyStroke(byte keyStroke, byte modifiers) {
+    sendData(keyStroke, modifiers);
+    // This stops endlessly repeating keystrokes:
+    sendData(0, 0);
+  }
+
+  // sendKeyStroke: sends a key press AND release
+  // void sendKeyStroke(byte keyStroke) { sendKeyStroke(keyStroke, 0); }
+
+
+  // sendKeyPress: sends a key press only - no release
+  // to release the key, send again with keyPress=0
+  void sendKeyPress(byte keyPress) { sendData(keyPress, 0); }
+
+
   size_t write(uint8_t chr) {
     if (keyboardMode) {
-      uint8_t data = pgm_read_byte_near(ascii_to_scan_code_table + (chr - 8));
+      uint8_t data = (uint8_t)(ascii_to_scan_code_table[chr - 8]);
       sendKeyStroke(data & 0b01111111, data >> 7 ? MOD_SHIFT_RIGHT : 0);
       return 1;
     } else {
@@ -331,19 +300,19 @@ class USBKeyboardOrSerialDevice : public Print {
   }
 
   // write a string
-  size_t write(const uint8_t *buffer, size_t size) {
-    if (keyboardMode) {
-      return Print::write(buffer, size);
-    }
+  // size_t write(const uint8_t *buffer, size_t size) override {
+  //   if (keyboardMode) {
+  //     return Print::write(buffer, size);
+  //   }
 
-    size_t count = 0;
-    unsigned char i;
-    for (i = 0; i < (size / 8) + 1; i++) {
-      count +=
-          write8(buffer + i * 8, (size < (count + 8)) ? (size - count) : 8);
-    }
-    return count;
-  }
+  //   size_t count = 0;
+  //   unsigned char i;
+  //   for (i = 0; i < (size / 8) + 1; i++) {
+  //     count +=
+  //         write8(buffer + i * 8, (size < (count + 8)) ? (size - count) : 8);
+  //   }
+  //   return count;
+  // }
 
   uchar available() { return received; }
 
@@ -359,65 +328,56 @@ class USBKeyboardOrSerialDevice : public Print {
     return i;
   }
 
-  bool keyboardMode = true;
 
-  uchar inBuffer[HIDSERIAL_INBUFFER_SIZE];
-  uchar outBuffer[2];
+  // using Print::write;
+// };
 
-  uchar received = 0;
-  uchar reportId = 0;
-  uchar bytesRemaining;
-  uchar *pos;
+// USBKeyboardOrSerialDevice USBKeyboardOrSerial = USBKeyboardOrSerialDevice();
 
-  using Print::write;
-};
-
-USBKeyboardOrSerialDevice USBKeyboardOrSerial = USBKeyboardOrSerialDevice();
-
-// USB_PUBLIC uchar usbFunctionWrite(uchar *data, uchar len) {
-//   if (USBKeyboardOrSerial.reportId == 0) {
-//     int i;
-//     if (len > USBKeyboardOrSerial.bytesRemaining)
-//       len = USBKeyboardOrSerial.bytesRemaining;
-//     USBKeyboardOrSerial.bytesRemaining -= len;
-//     // int start = (pos==inBuffer)?1:0;
-//     for (i = 0; i < len; i++) {
-//       if (data[i] != 0) {
-//         *USBKeyboardOrSerial.pos++ = data[i];
-//       }
-//     }
-//     if (USBKeyboardOrSerial.bytesRemaining == 0) {
-//       USBKeyboardOrSerial.received = 1;
-//       *USBKeyboardOrSerial.pos++ = 0;
-//       return 1;
-//     } else {
-//       return 0;
-//     }
-//   } else {
-//     return 1;
-//   }
-// }
+USB_PUBLIC uchar usbFunctionWrite(uchar *data, uchar len) {
+  if (reportId == 0) {
+    int i;
+    if (len > bytesRemaining)
+      len = bytesRemaining;
+    bytesRemaining -= len;
+    // int start = (pos==inBuffer)?1:0;
+    for (i = 0; i < len; i++) {
+      if (data[i] != 0) {
+        *pos++ = data[i];
+      }
+    }
+    if (bytesRemaining == 0) {
+      received = 1;
+      *pos++ = 0;
+      return 1;
+    } else {
+      return 0;
+    }
+  } else {
+    return 1;
+  }
+}
 
 USB_PUBLIC usbMsgLen_t usbFunctionSetup(uchar data[8]) {
   usbRequest_t *rq = (usbRequest_t *)((void *)data);
 
-  usbMsgPtr = USBKeyboardOrSerial.outBuffer;
-  USBKeyboardOrSerial.reportId = rq->wValue.bytes[0];
+  usbMsgPtr = outBuffer;
+  reportId = rq->wValue.bytes[0];
   if ((rq->bmRequestType & USBRQ_TYPE_MASK) == USBRQ_TYPE_CLASS) {
     /* class request type */
 
     if (rq->bRequest == USBRQ_HID_GET_REPORT) {
       return 0;
     } else if (rq->bRequest == USBRQ_HID_SET_REPORT) {
-      // /* since we have only one report type, we can ignore the report-ID */
-      // USBKeyboardOrSerial.pos = USBKeyboardOrSerial.inBuffer;
-      // USBKeyboardOrSerial.bytesRemaining = rq->wLength.word;
-      // if (USBKeyboardOrSerial.bytesRemaining >
-      //     sizeof(USBKeyboardOrSerial.inBuffer))
-      //   USBKeyboardOrSerial.bytesRemaining =
-      //       sizeof(USBKeyboardOrSerial.inBuffer);
-      // return USB_NO_MSG; /* use usbFunctionWrite() to receive data from host
-      // */
+      /* since we have only one report type, we can ignore the report-ID */
+      pos = inBuffer;
+      bytesRemaining = rq->wLength.word;
+      if (bytesRemaining >
+          sizeof(inBuffer))
+        bytesRemaining =
+            sizeof(inBuffer);
+      return USB_NO_MSG; /* use usbFunctionWrite() to receive data from host
+      */
     } else if (rq->bRequest == USBRQ_HID_GET_IDLE) {
       return 0;
     } else if (rq->bRequest == USBRQ_HID_SET_IDLE) {
