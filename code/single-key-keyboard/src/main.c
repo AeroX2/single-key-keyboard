@@ -1,23 +1,30 @@
-// #include <Arduino.h>
-// #include <EEPROM.h>
+#include <avr/eeprom.h>
 #include <avr/io.h>
-#include "USBKeyboardOrSerial/USBKeyboardOrSerial.h"
+#include <stdbool.h>
+
+#include "millis.h"
+#include "usb_keyboard_or_serial.h"
 
 #define BUTTON PIN3_bm
 #define SWITCH PIN4_bm
 #define LED PIN2_bm
 
 #define DEBOUNCE_DELAY 50
+#define KEYBOARD_STR_LENGTH 90
 
-int buttonState;
-int lastButtonState = 0;
-// bool keyboardMode = false;
+bool keyboardMode = false;
+
+bool lastButtonState = false;
+bool buttonState = false;
 
 unsigned long lastDebounceTime = 0;
 
-char keyboardString[90];
+char _eepromKeyboardString[KEYBOARD_STR_LENGTH] EEMEM = "";
+char keyboardString[KEYBOARD_STR_LENGTH];
 
 void setup() {
+  init_millis();
+
   // Pull up on button and switch
   PORTB.DIRCLR = BUTTON | SWITCH;
   PORTA.PIN3CTRL = PORT_PULLUPEN_bm;
@@ -27,43 +34,49 @@ void setup() {
   PORTB.DIRSET = LED;
 
   keyboardMode = (~PORTA.IN & SWITCH);
-  if (keyboardMode) {
-    // uint8_t c = EEPROM.read(0);
-    strcpy(keyboardString, "Hello World from #club-keyboard!");
-    // if (c == 0xFF) {
-    // } else {
-    //   // EEPROM.get(0, keyboardString);
-    // }
-  }
 
-  setMode(keyboardMode);
-  init();
+  // // There is a bug with <avr/eeprom.h> where NVM_STATUS doesn't exist for attiny416.
+  // while (!bit_is_clear(NVMCTRL.STATUS,NVMCTRL_EEBUSY_bp));
+
+  // eeprom_read_block(keyboardString, &_eepromKeyboardString,
+  //                   KEYBOARD_STR_LENGTH);
+  // if (keyboardString[0] == 0) {
+    strcpy(keyboardString, "Hello World from #club-keyboard!");
+  // }
+
+  usbInitKeyboardSerial();
 }
 
 void keyboardUpdate() {
   // read the state of the switch into a local variable:
-  int reading = (~PORTA.IN & BUTTON);
+  bool reading = (~PORTA.IN & BUTTON);
+
+  if (reading) {
+    PORTB.OUT |= LED;
+  } else {
+    PORTB.OUT &= ~LED;
+  }
 
   // check to see if you just pressed the button
   // (i.e. the input went from LOW to HIGH), and you've waited long enough
   // since the last press to ignore any noise:
 
   // If the switch changed, due to noise or pressing:
-  // if (reading != lastButtonState) {
-  //   // reset the debouncing timer
-  //   lastDebounceTime = millis();
-  // }
+  if (reading != lastButtonState) {
+    // reset the debouncing timer
+    lastDebounceTime = millis();
+  }
 
-  // if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
-  //   if (reading != buttonState) {
-  //     buttonState = reading;
+  if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
+    if (reading != buttonState) {
+      buttonState = reading;
 
-  //     if (buttonState == LOW) {
-        sendKeyStroke(0, 0);
-  //       USBKeyboardOrSerial.println(keyboardString);
-  //     }
-  //   }
-  // }
+      if (buttonState == false) {
+        usbSendKeyStroke(0, 0);
+        usbPrintln(keyboardString);
+      }
+    }
+  }
 
   // save the reading. Next time through the loop, it'll be the lastButtonState:
   lastButtonState = reading;
@@ -71,36 +84,38 @@ void keyboardUpdate() {
 
 void hidSerialUpdate() {
   // if (millis() - lastSerialTime > 20000) {
-  //   USBKeyboardOrSerial.print("Current string: ");
-  //   USBKeyboardOrSerial.println(keyboardString);
-  //   USBKeyboardOrSerial.print("Enter a new string: ");
+  //   usbPrint("Current string: ");
+  //   usbPrintln(keyboardString);
+  //   usbPrint("Enter a new string: ");
   // }
 
-  while (available()) {
-    unsigned char* buffer[90];
-    read(buffer);
+  // while (available()) {
+  //   unsigned char* buffer[90];
+  //   read(buffer);
 
-    // EEPROM.put(0, buffer);
+  //   // EEPROM.put(0, buffer);
 
-  //   USBKeyboardOrSerial.print("New string is: ");
-    // USBKeyboardOrSerial.println((char*)buffer);
-    strcpy(keyboardString, (char*)buffer);
-    // USBKeyboardOrSerial.println("Please reboot");
-  }
+  //   usbPrint("New string is: ");
+  //   usbPrintln((char*)buffer);
+  //   strcpy(keyboardString, (char*)buffer);
+  //   usbPrintln("Please reboot");
+  // }
 }
 
-void main(void) __attribute__((noreturn));  void main(void) {
+void main(void) __attribute__((noreturn));
+void main(void) {
   setup();
   while (1) {
-  if (keyboardMode) {
-    keyboardUpdate();
-  } else {
-    hidSerialUpdate();
-  }
-  }
+    // It's better to use DigiKeyboard.delay() over the regular Arduino delay()
+    // if doing keyboard stuff because it keeps talking to the computer to make
+    // sure the computer knows the keyboard is alive and connected
+    usbDelay(50);
 
-  // It's better to use DigiKeyboard.delay() over the regular Arduino delay()
-  // if doing keyboard stuff because it keeps talking to the computer to make
-  // sure the computer knows the keyboard is alive and connected
-  // USBKeyboardOrSerial.delay(10);
+    keyboardUpdate();
+    hidSerialUpdate();
+
+    // if (keyboardMode) {
+    // } else {
+    // }
+  }
 }
