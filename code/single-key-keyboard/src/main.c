@@ -18,8 +18,9 @@ bool lastButtonState = false;
 bool buttonState = false;
 
 unsigned long lastDebounceTime = 0;
+unsigned long lastSerialTime = 0;
 
-char _eepromKeyboardString[KEYBOARD_STR_LENGTH] EEMEM = "";
+static char EEMEM _eepromKeyboardString[KEYBOARD_STR_LENGTH];
 char keyboardString[KEYBOARD_STR_LENGTH];
 
 void setup() {
@@ -51,12 +52,6 @@ void keyboardUpdate() {
   // read the state of the switch into a local variable:
   bool reading = (~PORTA.IN & BUTTON);
 
-  if (reading) {
-    PORTB.OUT |= LED;
-  } else {
-    PORTB.OUT &= ~LED;
-  }
-
   // check to see if you just pressed the button
   // (i.e. the input went from LOW to HIGH), and you've waited long enough
   // since the last press to ignore any noise:
@@ -73,7 +68,7 @@ void keyboardUpdate() {
 
       if (buttonState == false) {
         usbSendKeyStroke(0, 0);
-        usbPrintln(keyboardString);
+        usbKeyboardPrintln(keyboardString);
       }
     }
   }
@@ -83,26 +78,26 @@ void keyboardUpdate() {
 }
 
 void hidSerialUpdate() {
-  // if (millis() - lastSerialTime > 20000) {
-  //   usbPrint("Current string: ");
-  //   usbPrintln(keyboardString);
-  //   usbPrint("Enter a new string: ");
-  // }
+  if (millis() - lastSerialTime > 20000) {
+    // usbSerialPrint("Current string: ");
+    // usbSerialPrintln(keyboardString); 
+    // usbSerialPrint("Enter a new string: ");
+    // usbSerialPrint("testtest");
+  }
+  lastSerialTime = millis();
 
-  // while (available()) {
+  // while (usbSerialAvailable()) {
   //   unsigned char* buffer[90];
-  //   read(buffer);
+  //   usbSerialRead(buffer);
 
-  //   // EEPROM.put(0, buffer);
-
-  //   usbPrint("New string is: ");
-  //   usbPrintln((char*)buffer);
+  //   usbSerialPrint("New string is: ");
+  //   usbSerialPrintln((char*)buffer);
   //   strcpy(keyboardString, (char*)buffer);
-  //   usbPrintln("Please reboot");
+  //   usbSerialPrintln("Please reboot");
   // }
 }
 
-void main(void) __attribute__((noreturn));
+// void main(void) __attribute__((noreturn));
 void main(void) {
   setup();
   while (1) {
@@ -113,9 +108,5 @@ void main(void) {
 
     keyboardUpdate();
     hidSerialUpdate();
-
-    // if (keyboardMode) {
-    // } else {
-    // }
   }
 }
