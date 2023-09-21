@@ -3,16 +3,13 @@
 #include <stdbool.h>
 
 #include "millis.h"
-#include "usb_keyboard_or_serial.h"
+#include "usb_keyboard.h"
 
 #define BUTTON PIN3_bm
 #define SWITCH PIN4_bm
 #define LED PIN2_bm
 
 #define DEBOUNCE_DELAY 50
-#define KEYBOARD_STR_LENGTH 90
-
-bool keyboardMode = false;
 
 bool lastButtonState = false;
 bool buttonState = false;
@@ -24,7 +21,7 @@ static char EEMEM _eepromKeyboardString[KEYBOARD_STR_LENGTH];
 char keyboardString[KEYBOARD_STR_LENGTH];
 
 void setup() {
-  init_millis();
+  initMillis();
 
   // Pull up on button and switch
   PORTB.DIRCLR = BUTTON | SWITCH;
@@ -34,24 +31,21 @@ void setup() {
   // Set led to output
   PORTB.DIRSET = LED;
 
-  keyboardMode = (~PORTA.IN & SWITCH);
+  // There is a bug with <avr/eeprom.h> where NVM_STATUS doesn't exist for attiny416.
+  while (!bit_is_clear(NVMCTRL.STATUS,NVMCTRL_EEBUSY_bp));
 
-  // // There is a bug with <avr/eeprom.h> where NVM_STATUS doesn't exist for attiny416.
-  // while (!bit_is_clear(NVMCTRL.STATUS,NVMCTRL_EEBUSY_bp));
+  eeprom_read_block(keyboardString, _eepromKeyboardString, KEYBOARD_STR_LENGTH);
+  if (keyboardString[0] == 0) {
+    strcpy(keyboardString, "Hello World from #club-keyboard!\n");
+  }
 
-  // eeprom_read_block(keyboardString, &_eepromKeyboardString,
-  //                   KEYBOARD_STR_LENGTH);
-  // if (keyboardString[0] == 0) {
-    strcpy(keyboardString, "Hello World from #club-keyboard!");
-  // }
-
-  usbInitKeyboardSerial();
+  usbInitKeyboard();
 }
 
 void keyboardUpdate() {
   // read the state of the switch into a local variable:
   bool reading = (~PORTA.IN & BUTTON);
-
+  
   // check to see if you just pressed the button
   // (i.e. the input went from LOW to HIGH), and you've waited long enough
   // since the last press to ignore any noise:
@@ -68,7 +62,7 @@ void keyboardUpdate() {
 
       if (buttonState == false) {
         usbSendKeyStroke(0, 0);
-        usbKeyboardPrintln(keyboardString);
+        usbPrint(keyboardString);
       }
     }
   }
@@ -77,27 +71,13 @@ void keyboardUpdate() {
   lastButtonState = reading;
 }
 
-void hidSerialUpdate() {
-  if (millis() - lastSerialTime > 20000) {
-    // usbSerialPrint("Current string: ");
-    // usbSerialPrintln(keyboardString); 
-    // usbSerialPrint("Enter a new string: ");
-    // usbSerialPrint("testtest");
+void eepromUpdate() {
+  if (received) {
+    received = false;
+    eeprom_write_block(keyboardString, _eepromKeyboardString, KEYBOARD_STR_LENGTH);
   }
-  lastSerialTime = millis();
-
-  // while (usbSerialAvailable()) {
-  //   unsigned char* buffer[90];
-  //   usbSerialRead(buffer);
-
-  //   usbSerialPrint("New string is: ");
-  //   usbSerialPrintln((char*)buffer);
-  //   strcpy(keyboardString, (char*)buffer);
-  //   usbSerialPrintln("Please reboot");
-  // }
 }
 
-// void main(void) __attribute__((noreturn));
 void main(void) {
   setup();
   while (1) {
@@ -107,6 +87,6 @@ void main(void) {
     usbDelay(50);
 
     keyboardUpdate();
-    hidSerialUpdate();
+    eepromUpdate();
   }
 }

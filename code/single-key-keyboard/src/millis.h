@@ -5,7 +5,7 @@
 #include <avr/interrupt.h>
 #include <util/atomic.h>
  
-void init_millis();
+void initMillis();
 uint32_t millis();
 uint32_t micros();
  

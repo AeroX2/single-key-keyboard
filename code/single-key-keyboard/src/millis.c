@@ -5,7 +5,7 @@ volatile static uint32_t timerMillis;
 #define TIMER_TOP (F_CPU / 1000 - 1)  // Overflow after 1 ms
 
 // Initializes the use of the timer functions by setting up the TCA timer.
-void init_millis() {
+void initMillis() {
   TCA0.SINGLE.PER = TIMER_TOP;
   TCA0.SINGLE.INTCTRL = TCA_SINGLE_OVF_bm;  // Enable overflow interrupt
   TCA0.SINGLE.CTRLA =
