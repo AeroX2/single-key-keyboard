@@ -17,8 +17,8 @@ bool buttonState = false;
 unsigned long lastDebounceTime = 0;
 unsigned long lastSerialTime = 0;
 
-static char EEMEM _eepromKeyboardString[KEYBOARD_STR_LENGTH];
-char keyboardString[KEYBOARD_STR_LENGTH];
+static uchar EEMEM _eepromKeyboardString[KEYBOARD_STR_LENGTH];
+uchar keyboardString[KEYBOARD_STR_LENGTH];
 
 void setup() {
   initMillis();
@@ -29,14 +29,17 @@ void setup() {
   PORTA.PIN4CTRL = PORT_PULLUPEN_bm;
 
   // Set led to output
-  PORTB.DIRSET = LED;
+  // PORTB.DIRSET = LED;
 
   // There is a bug with <avr/eeprom.h> where NVM_STATUS doesn't exist for attiny416.
   while (!bit_is_clear(NVMCTRL.STATUS,NVMCTRL_EEBUSY_bp));
 
   eeprom_read_block(keyboardString, _eepromKeyboardString, KEYBOARD_STR_LENGTH);
-  if (keyboardString[0] == 0) {
-    strcpy(keyboardString, "Hello World from #club-keyboard!\n");
+  if (keyboardString[0] == 0 || keyboardString[0] == 255) {
+    strcpy(keyboardString,
+           "Hello World from #club-keyboard!\n"
+           "I'm James Ridey, the maker of this custom circuit\n"
+           "To tweak this message, see (github.com/AeroX2/single-key-keyboard)\n");
   }
 
   usbInitKeyboard();

@@ -14,7 +14,7 @@
 #include "usbdrv/scancode-ascii-table.h"
 #include "usbdrv/usbdrv.h"
 
-#define KEYBOARD_STR_LENGTH 150
+#define KEYBOARD_STR_LENGTH 165
 
 const PROGMEM char usbDescriptorHidReport[] = {
     0x05, 0x01,        // USAGE_PAGE (Generic Desktop)
@@ -49,7 +49,7 @@ keyboard_report_t currentReport;
 
 uint8_t idleRate = 500 / 4;  // repeat rate for keyboards in 4 ms units
 
-extern char keyboardString[KEYBOARD_STR_LENGTH];
+extern uchar keyboardString[KEYBOARD_STR_LENGTH];
 
 uchar* stringPos;
 uint8_t bytesRemaining;

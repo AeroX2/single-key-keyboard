@@ -7,9 +7,9 @@ try:
 
     while True:
         keyboard_string = input("New keyboard string: ")
-        if len(keyboard_string) < 150:
+        if len(keyboard_string) < 165:
             break
-        print("Keyboard string too long, must be less than 150 characters")
+        print("Keyboard string too long, must be less than 165 characters")
 
     newline = input("Newline (Y/n): ").lower() != "n"
 
