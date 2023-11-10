@@ -6,7 +6,7 @@ Welcome to the Single Key Keyboard setup guide! If you're here, it means you're 
 The only dependency you'll need is the `hid` Python package. You can install it with the following command:
 
 ```bash
-pip install hid
+pip install hidapi
 ```
 
 ## Usage
